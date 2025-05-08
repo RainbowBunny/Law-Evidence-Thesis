@@ -1,0 +1,168 @@
+import "hashes/keccak/256bit" as keccak256;
+from "ecc/babyjubjubParams" import BabyJubJubParams;
+import "ecc/babyjubjubParams" as context;
+import "ecc/edwardsAdd" as add;
+import "ecc/edwardsScalarMult" as scalarMult;
+
+const u32 THRESHOLD_MINUS1 = 5;
+const u32 N_MINER = 10;
+const u32 N_ATTRIBUTE = 2;
+const u32 HASH_LENGTH = 256;
+
+from "EMBED" import u8_from_bits, u8_to_bits;
+import "utils/pack/bool/unpack128";
+import "utils/pack/bool/unpack256";
+import "utils/pack/bool/pack256";
+import "utils/pack/bool/nonStrictUnpack256" as unpack256bool;
+import "utils/casts/u32_to_field";
+
+def field_to_bytes_array(field m) -> u8[32] {
+  bool[256] bits = unpack256(m);
+
+  u8[32] mut res = [0; 32];
+
+  for u32 i in 0..32 {
+    res[i] = u8_from_bits(bits[8 * i..8 * (i + 1)]);
+  }
+
+  return res;
+}
+
+def field_128_to_bytes_array(field m) -> u8[16] {
+  bool[128] bits = unpack128(m);
+
+  u8[16] mut res = [0; 16];
+
+  for u32 i in 0..16 {
+    res[i] = u8_from_bits(bits[8 * i..8 * (i + 1)]);
+  }
+
+  return res;
+}
+
+def u8_array_to_fields(u8[32] input) -> field {
+  bool[256] mut res = [false; 256];
+
+  for u32 i in 0..32 {
+    bool[8] bits = u8_to_bits(input[i]);
+    for u32 j in 0..8 {
+      res[i * 8 + j] = bits[j];
+    }
+  }
+
+  return pack256(res);
+}
+
+def verifyEddsa(field m, field[3] sig, field[2] pk) -> bool {
+  field[2] R = sig[0..2];
+  field s = sig[2];
+  field h = u8_array_to_fields(keccak256(
+    [...field_to_bytes_array(R[0]),
+     ...field_to_bytes_array(R[1]),
+     ...field_to_bytes_array(pk[0]),
+     ...field_to_bytes_array(pk[1]),
+     ...field_to_bytes_array(m)]
+  ));
+
+  BabyJubJubParams context = context();
+  field[2] G = [context.Gu, context.Gv];
+  return scalarMult(
+    unpack256bool(s), G, context
+  ) == add(
+    R, scalarMult(unpack256bool(h), pk, context), context
+  );
+}
+
+def enc(field[2] m, field[2] pk, field r) -> field[2][2] {
+  BabyJubJubParams context = context();
+  field[2] G = [context.Gu, context.Gv];
+  bool[256] boolr = unpack256bool(r);
+
+  return [
+    scalarMult(boolr, G, context), 
+    add(m, scalarMult(boolr, pk, context), context)
+  ];
+}
+
+def shareGens(field[THRESHOLD_MINUS1] Pk_i_minus1, field[2] s0) -> field[N_MINER][2] {
+  field[N_MINER][2] mut res = [[0; 2]; N_MINER];
+  field[THRESHOLD_MINUS1][2] mut Pk_point = [[0; 2]; THRESHOLD_MINUS1];
+
+  BabyJubJubParams context = context();
+  field[2] G = [context.Gu, context.Gv];
+
+  for u32 i in 0..THRESHOLD_MINUS1 {
+    Pk_point[i] = scalarMult(unpack256bool(Pk_i_minus1[i]), G, context); 
+  }
+
+  for u32 i in 0..N_MINER {
+    field[2] mut s1 = [0, 1];
+    bool[256] x = unpack256bool(u32_to_field(i + 1));
+    for u32 j in 0..THRESHOLD_MINUS1 {
+      s1 = add(s1, Pk_point[THRESHOLD_MINUS1 - j - 1], context);
+      s1 = scalarMult(x, s1, context);
+    }
+
+    res[i] = add(
+      s0, s1, context
+    );
+  }
+
+  return res;
+}
+
+def main(
+  private field m_i, // 128 bit
+  private field r, // 128 bit
+  private field[THRESHOLD_MINUS1] Pk_i_minus1,
+  private u8[N_ATTRIBUTE][16] Q_t, // 128 bit
+  private field[N_ATTRIBUTE] X_t, // 128 bit
+  private field[3] cert_i, // R, s
+
+  u8[32] hat_h_i,
+  field[2] PK_IP,
+  field[N_MINER][2][2] C_n,
+  field[N_MINER][2] PK_Vn,
+  u8[N_ATTRIBUTE][32] Y_t
+) -> bool {
+  // 1. Calculate h_i <- H(m_i)
+  u8[32] h_i = keccak256(field_128_to_bytes_array(m_i));
+
+  // 2. Compute root_i <- H(X_t, h_i)
+  field root_i = u8_array_to_fields(keccak256([
+    ...field_128_to_bytes_array(X_t[0]), 
+    ...field_128_to_bytes_array(X_t[1]), 
+    ...h_i]));
+
+  // 3. Verify_sig(root_i, cert_i, PK_IP)
+  bool b1 = verifyEddsa(root_i, cert_i, PK_IP);
+
+  // 4. Check if h_hat_i = H(m_i + 1)
+  u8[32] m_i_plus1_hash = keccak256(field_128_to_bytes_array(m_i + 1));
+  bool mut b2 = true;
+  for u32 i in 0..32 {
+    b2 = b2 && (hat_h_i[i] == m_i_plus1_hash[i]);
+  }
+  
+  // 5. Calculate e_i <- g^PIA
+  BabyJubJubParams context = context();
+  field[2] G = [context.Gu, context.Gv];
+  field[2] e_i = scalarMult(unpack256bool(X_t[0]), G, context);
+
+  // 6. Compute S_n <- shareGens(Pk_i_minus1, e_i)
+  field[N_MINER][2] S_n = shareGens(Pk_i_minus1, e_i);
+
+  // 7. Check if c_i = ENC(s_i, PK_v_i, r)
+  bool mut b3 = true;
+  for u32 i in 0..N_MINER {
+    b3 = b3 && (C_n[i] == enc(S_n[i], PK_Vn[i], r));
+  }
+
+  // 8. Check if y_i = H(x_i, q_i)
+  bool mut b4 = true;
+  for u32 i in 0..N_ATTRIBUTE {
+    b4 = b4 && (Y_t[i] == keccak256([...field_128_to_bytes_array(X_t[i]), ...Q_t[i]]));
+  }
+
+  return (b1 && b2 && b3 && b4);
+}

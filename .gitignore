@@ -1,0 +1,6 @@
+*/out
+*.r1cs
+*.wtns
+*.key
+*/witness
+*/__pycache__/*

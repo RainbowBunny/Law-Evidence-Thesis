@@ -1,0 +1,31 @@
+import "ecc/edwardsScalarMult" as scalarMult;
+import "ecc/edwardsAdd" as add;
+import "utils/pack/bool/nonStrictUnpack256" as unpack256bool;
+from "ecc/babyjubjubParams" import BabyJubJubParams;
+import "ecc/babyjubjubParams" as context;
+import "ecc/edwardsNegate" as neg;
+ 
+def main(
+  private field sk, 
+  field[2] c1, 
+  field[2] c2, 
+  field[2] s, 
+  field[2] pk
+) -> bool {
+  BabyJubJubParams context = context();
+  field[2] G = [context.Gu, context.Gv];
+
+  // 1. Check if pk = g^sk
+  bool[256] sk_bit = unpack256bool(sk);
+
+  // 2. Decrypt c = {c1, c2} and check if s == dec(pk,c)
+  // compute c1^sk
+  field[2] c1sk = scalarMult(sk_bit,c1,context);
+  // compute neg of c1^sk
+  field[2] neg_c1sk = neg(c1sk);
+  // compute m
+  field[2] m = add(c2,neg_c1sk,context);
+  
+  // 3. Return true if 1 and 2 are true.
+  return (pk == scalarMult(sk_bit, G, context)) && (s == m);
+}

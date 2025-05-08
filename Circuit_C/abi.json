@@ -1,0 +1,118 @@
+{
+  "inputs": [
+    {
+      "name": "m_i",
+      "public": false,
+      "type": "field"
+    },
+    {
+      "name": "r",
+      "public": false,
+      "type": "field"
+    },
+    {
+      "name": "Pk_i_minus1",
+      "public": false,
+      "type": "array",
+      "components": {
+        "size": 5,
+        "type": "field"
+      }
+    },
+    {
+      "name": "Q_t",
+      "public": false,
+      "type": "array",
+      "components": {
+        "size": 2,
+        "type": "array",
+        "components": {
+          "size": 16,
+          "type": "u8"
+        }
+      }
+    },
+    {
+      "name": "X_t",
+      "public": false,
+      "type": "array",
+      "components": {
+        "size": 2,
+        "type": "field"
+      }
+    },
+    {
+      "name": "cert_i",
+      "public": false,
+      "type": "array",
+      "components": {
+        "size": 3,
+        "type": "field"
+      }
+    },
+    {
+      "name": "hat_h_i",
+      "public": true,
+      "type": "array",
+      "components": {
+        "size": 32,
+        "type": "u8"
+      }
+    },
+    {
+      "name": "PK_IP",
+      "public": true,
+      "type": "array",
+      "components": {
+        "size": 2,
+        "type": "field"
+      }
+    },
+    {
+      "name": "C_n",
+      "public": true,
+      "type": "array",
+      "components": {
+        "size": 10,
+        "type": "array",
+        "components": {
+          "size": 2,
+          "type": "array",
+          "components": {
+            "size": 2,
+            "type": "field"
+          }
+        }
+      }
+    },
+    {
+      "name": "PK_Vn",
+      "public": true,
+      "type": "array",
+      "components": {
+        "size": 10,
+        "type": "array",
+        "components": {
+          "size": 2,
+          "type": "field"
+        }
+      }
+    },
+    {
+      "name": "Y_t",
+      "public": true,
+      "type": "array",
+      "components": {
+        "size": 2,
+        "type": "array",
+        "components": {
+          "size": 32,
+          "type": "u8"
+        }
+      }
+    }
+  ],
+  "output": {
+    "type": "bool"
+  }
+}

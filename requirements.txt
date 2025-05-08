@@ -1,0 +1,4 @@
+zokrates_pycrypto
+pycryptodome
+web3
+
